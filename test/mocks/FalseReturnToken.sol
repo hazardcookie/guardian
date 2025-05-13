@@ -25,19 +25,23 @@ contract FalseReturnToken {
     }
 
     /// @notice Simulates a transfer that always fails by returning false.
-    /// @param to The recipient address (ignored).
-    /// @param amount The amount to transfer (ignored).
+    /// @param _to The recipient address (ignored).
+    /// @param _amount The amount to transfer (ignored).
     /// @return Always returns false.
-    function transfer(address to, uint256 amount) public pure returns (bool) {
+    function transfer(address _to, uint256 _amount) public pure returns (bool) {
+        // Reference parameters to avoid unused-variable compiler warnings.
+        (_to, _amount);
         return false;
     }
 
     /// @notice Simulates a transferFrom that always fails by returning false.
-    /// @param from The sender address (ignored).
-    /// @param to The recipient address (ignored).
-    /// @param amount The amount to transfer (ignored).
+    /// @param _from The sender address (ignored).
+    /// @param _to The recipient address (ignored).
+    /// @param _amount The amount to transfer (ignored).
     /// @return Always returns false.
-    function transferFrom(address from, address to, uint256 amount) public pure returns (bool) {
+    function transferFrom(address _from, address _to, uint256 _amount) public pure returns (bool) {
+        // Reference parameters to avoid unused-variable compiler warnings.
+        (_from, _to, _amount);
         return false;
     }
 

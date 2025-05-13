@@ -41,6 +41,7 @@ error AmountTooSmall();
 error NonIntegralConversion(); //  amount must be an exact multiple
 error InsufficientUSDC();
 error InsufficientRLUSD();
+error InsufficientReserve();
 error ZeroRecipient();
 error AlreadySupplyManager();
 error NotSupplyManager();
@@ -96,7 +97,6 @@ contract RLUSDGuardian is
 
     /// @dev Decimals cached for conversion math.
     uint8 private rlusdDecimals;
-    /// @dev Decimals cached for conversion math.
     uint8 private usdcDecimals;
 
     /// @dev 10**(abs(rlusdDecimals − usdcDecimals)). For RLUSD18 ↔︎ USDC6 this is 1e12.
@@ -107,6 +107,16 @@ contract RLUSDGuardian is
 
     /// @dev Mapping of wallet address to supply manager status.
     mapping(address => bool) private _supplyManagers;
+
+    /* --------------------------------------------------------------------- */
+    /*                               Modifiers                               */
+    /* --------------------------------------------------------------------- */
+
+    /// @dev Restricts caller to owner or authorised supply manager.
+    modifier onlyOwnerOrSupplyManager() {
+        if (!_supplyManagers[msg.sender] && msg.sender != owner()) revert NotAuthorised();
+        _;
+    }
 
     /* --------------------------------------------------------------------- */
     /*                            Initialisation                             */
@@ -222,8 +232,11 @@ contract RLUSDGuardian is
     /// @param tokenAddress The address of the token to fund (must be RLUSD or USDC).
     /// @param amount The amount to fund.
     /// @dev Only callable by supply managers or the owner. Reverts for invalid token or zero amount.
-    function fundReserve(address tokenAddress, uint256 amount) external nonReentrant {
-        if (!_supplyManagers[msg.sender] && msg.sender != owner()) revert NotAuthorised();
+    function fundReserve(address tokenAddress, uint256 amount)
+        external
+        nonReentrant
+        onlyOwnerOrSupplyManager
+    {
         if (tokenAddress != address(rlusdToken) && tokenAddress != address(usdcToken)) {
             revert InvalidToken();
         }
@@ -241,12 +254,16 @@ contract RLUSDGuardian is
     function withdrawReserve(address tokenAddress, uint256 amount, address to)
         external
         nonReentrant
+        onlyOwnerOrSupplyManager
     {
-        if (!_supplyManagers[msg.sender] && msg.sender != owner()) revert NotAuthorised();
         if (tokenAddress != address(rlusdToken) && tokenAddress != address(usdcToken)) {
             revert InvalidToken();
         }
+        if (amount == 0) revert AmountZero();
         if (to == address(0)) revert ZeroRecipient();
+        if (IERC20(tokenAddress).balanceOf(address(this)) < amount) {
+            revert InsufficientReserve();
+        }
 
         IERC20(tokenAddress).safeTransfer(to, amount);
         emit ReserveWithdrawn(msg.sender, tokenAddress, amount, to);

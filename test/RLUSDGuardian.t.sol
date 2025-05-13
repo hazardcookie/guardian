@@ -34,22 +34,8 @@ contract RLUSDGuardianTest is Test {
     address public supplyManager1; // First supply manager address
     address public supplyManager2; // Second supply manager address
 
-    // Events from RLUSDGuardian (for vm.expectEmit comparisons)
-    event WhitelistAdded(address indexed account); // Emitted when a market maker is whitelisted
-    event WhitelistRemoved(address indexed account); // Emitted when a market maker is removed from whitelist
-    event SwapExecuted(
-        address indexed account,
-        address indexed tokenIn,
-        uint256 amountIn,
-        address indexed tokenOut,
-        uint256 amountOut
-    ); // Emitted when a swap is executed
-    event SupplyManagerAdded(address indexed account); // Emitted when a supply manager is added
-    event SupplyManagerRemoved(address indexed account); // Emitted when a supply manager is removed
-    event ReserveFunded(address indexed from, address indexed token, uint256 amount); // Emitted when a reserve is funded
-    event ReserveWithdrawn(
-        address indexed by, address indexed token, uint256 amount, address indexed to
-    ); // Emitted when a reserve is withdrawn
+    // Events are already declared in RLUSDGuardian; re-declaring them here is unnecessary and
+    // triggers compiler shadowing warnings. We simply reference the imported declarations.
 
     /// @notice Deploys the RLUSDGuardian behind a proxy and sets up initial test state.
     /// @dev This function is called before each test. It deploys tokens, mints balances, deploys the proxy, and funds the guardian.
@@ -247,6 +233,10 @@ contract RLUSDGuardianTest is Test {
         usdc.approve(address(guardian), 100 * 10 ** 6);
         console.log("testSwapAccessControl(): marketMaker1 approved guardian");
         vm.prank(marketMaker1);
+        vm.expectEmit(true, true, true, true);
+        emit SwapExecuted(
+            marketMaker1, address(usdc), 100 * 10 ** 6, address(rlusd), 100 * 10 ** 18
+        );
         guardian.swapUSDCForRLUSD(100 * 10 ** 6);
         console.log("testSwapAccessControl(): marketMaker1 swapped USDC for RLUSD");
         assertEq(usdc.balanceOf(marketMaker1), 0, "USDC balance did not decrease correctly");
