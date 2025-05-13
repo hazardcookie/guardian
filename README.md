@@ -102,6 +102,46 @@ forge fmt
 anvil
 ```
 
+### 7. Configure Environment Variables (.env)
+
+Create a `.env` file in the project root and fill in the following keys (do **not** commit this file!):
+
+```ini
+# RPC endpoint for Sepolia (Alchemy, Infura, or a public endpoint)
+SEPOLIA_RPC=https://ethereum-sepolia-rpc.publicnode.com
+
+# Etherscan API key used for automatic contract verification
+ETHERSCAN_API_KEY=YOUR_ETHERSCAN_API_KEY_HERE
+
+# Private key of the deployer account that holds Sepolia ETH
+DEPLOYER_KEY=0xYOUR_PRIVATE_KEY
+
+# Address that will be set as the cold owner of the Guardian (no private key required) - This can be any address: eoa, gnosis safe, fireblocks etc
+COLD_OWNER=0xYourColdOwnerAddress
+
+# Pre-existing RLUSD & USDC ERC-20 token addresses on Sepolia
+RLUSD_TOKEN=0x...
+USDC_TOKEN=0x...
+```
+
+> Tip  Copy the file as `.env.example` (with dummy values) so that other contributors know which variables are required.
+
+### 8. Deploy to Sepolia
+
+The repository contains a Forge script that deploys an upgradeable `RLUSDGuardian` proxy and automatically verifies the implementation on Etherscan.
+
+```sh
+forge script script/DeployGuardian.s.sol \
+  --rpc-url   $SEPOLIA_RPC \
+  --broadcast \
+  --verify \
+  --etherscan-api-key $ETHERSCAN_API_KEY \
+  --chain-id 11155111 \
+  -vvvv       # verbose output
+```
+
+After the transaction is mined and the verification step completes Forge will print a link to the verified contract on Sepolia Etherscan.
+
 ---
 
 ## Contract Overview
