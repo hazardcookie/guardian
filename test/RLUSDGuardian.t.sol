@@ -8,146 +8,16 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import "../src/RLUSDGuardian.sol";
 import "forge-std/console.sol";
+import {FalseReturnToken} from "./mocks/FalseReturnToken.sol";
+import {NoReturnToken} from "./mocks/NoReturnToken.sol";
+import {RLUSDGuardianV2} from "./mocks/RLUSDGuardianV2.sol";
+import {MockToken} from "./mocks/MockToken.sol";
 
 // Define error selectors
 bytes4 constant OWNABLE_UNAUTHORIZED_ACCOUNT =
     bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
 bytes4 constant ERC20_INSUFFICIENT_BALANCE =
     bytes4(keccak256("ERC20InsufficientBalance(address,uint256,uint256)"));
-
-/// @dev ERC20 token that simulates a non-standard behavior by returning false on transfers instead of reverting.
-/// This is used to test how the guardian handles tokens that do not revert on failure, but instead return false.
-contract FalseReturnToken {
-    string public name; // Token name
-    string public symbol; // Token symbol
-    uint8 public decimals; // Number of decimals
-    mapping(address => uint256) public balanceOf; // Mapping of address to balance
-    mapping(address => mapping(address => uint256)) public allowance; // Allowance mapping
-
-    event Transfer(address indexed from, address indexed to, uint256 value); // Standard ERC20 event
-    event Approval(address indexed owner, address indexed spender, uint256 value); // Standard ERC20 event
-
-    constructor(string memory name_, string memory symbol_, uint8 decimals_) {
-        name = name_;
-        symbol = symbol_;
-        decimals = decimals_;
-    }
-
-    function transfer(address, uint256) public pure returns (bool) {
-        // Always return false (simulate ERC20 that signals failure without revert)
-        return false;
-    }
-
-    function transferFrom(address, address, uint256) public pure returns (bool) {
-        // Always return false (simulate ERC20 that signals failure without revert)
-        return false;
-    }
-
-    function approve(address spender, uint256 value) public returns (bool) {
-        // Set allowance and emit event
-        allowance[msg.sender][spender] = value;
-        emit Approval(msg.sender, spender, value);
-        return true;
-    }
-    /// @notice Mint tokens to an address for testing purposes.
-
-    function mint(address to, uint256 amount) external {
-        // Increase balance and emit transfer event
-        balanceOf[to] += amount;
-        emit Transfer(address(0), to, amount);
-    }
-}
-
-/// @dev ERC20 token that simulates a non-standard behavior by not returning a boolean on transfers (like USDT).
-/// This is used to test how the guardian handles tokens that do not return a value on transfer/transferFrom.
-contract NoReturnToken {
-    string public name; // Token name
-    string public symbol; // Token symbol
-    uint8 public decimals; // Number of decimals
-    mapping(address => uint256) public balanceOf; // Mapping of address to balance
-    mapping(address => mapping(address => uint256)) public allowance; // Allowance mapping
-
-    event Transfer(address indexed from, address indexed to, uint256 value); // Standard ERC20 event
-    event Approval(address indexed owner, address indexed spender, uint256 value); // Standard ERC20 event
-
-    constructor(string memory name_, string memory symbol_, uint8 decimals_) {
-        name = name_;
-        symbol = symbol_;
-        decimals = decimals_;
-    }
-
-    function transfer(address to, uint256 value) public /* no return value */ {
-        // Require sufficient balance, then transfer and emit event
-        require(balanceOf[msg.sender] >= value, "NoReturnToken: insufficient balance");
-        balanceOf[msg.sender] -= value;
-        balanceOf[to] += value;
-        emit Transfer(msg.sender, to, value);
-        // No return value (non-standard ERC20)
-    }
-
-    function transferFrom(address from, address to, uint256 value) public /* no return value */ {
-        // Require sufficient balance and allowance, then transfer and emit event
-        require(balanceOf[from] >= value, "NoReturnToken: insufficient balance");
-        require(allowance[from][msg.sender] >= value, "NoReturnToken: insufficient allowance");
-        balanceOf[from] -= value;
-        balanceOf[to] += value;
-        emit Transfer(from, to, value);
-        allowance[from][msg.sender] -= value;
-        // No return value
-    }
-
-    function approve(address spender, uint256 value) public returns (bool) {
-        // Set allowance and emit event
-        allowance[msg.sender][spender] = value;
-        emit Approval(msg.sender, spender, value);
-        return true;
-    }
-    /// @notice Mint tokens to an address for testing purposes.
-
-    function mint(address to, uint256 amount) external {
-        // Increase balance and emit transfer event
-        balanceOf[to] += amount;
-        emit Transfer(address(0), to, amount);
-    }
-}
-
-/// @dev Dummy new implementation for upgrade testing (UUPS V2 with an extra feature).
-/// This contract is used to test upgradeability of the RLUSDGuardian contract.
-contract RLUSDGuardianV2 is RLUSDGuardian {
-    // New storage variable (to test storage layout compatibility)
-    uint256 public newValue;
-
-    /// @notice New function in V2 implementation.
-    /// @dev Returns a constant value to verify upgrade worked.
-    function getNewValue() external pure returns (uint256) {
-        return 42;
-    }
-    /// @notice Set a new value (onlyOwner) to test state changes in upgraded contract.
-
-    function setNewValue(uint256 _val) external onlyOwner {
-        newValue = _val;
-    }
-}
-
-/// @dev Custom mock token with fixed decimals for testing
-/// This is used to create RLUSD and USDC tokens with specific decimals for the tests.
-contract MockToken is ERC20 {
-    uint8 private _decimals; // Store decimals for this token
-
-    constructor(string memory name, string memory symbol, uint8 decimals_) ERC20(name, symbol) {
-        _decimals = decimals_;
-    }
-
-    function decimals() public view virtual override returns (uint8) {
-        // Return the custom decimals value
-        return _decimals;
-    }
-
-    function mint(address to, uint256 amount) external {
-        // Mint tokens to the specified address
-        _mint(to, amount);
-    }
-}
 
 /// @notice Comprehensive test suite for the RLUSDGuardian contract.
 /// @dev This contract contains all tests for the RLUSDGuardian, including setup, swap, whitelist, rescue, and upgradeability.
@@ -161,6 +31,8 @@ contract RLUSDGuardianTest is Test {
     address public marketMaker1; // First market maker address
     address public marketMaker2; // Second market maker address
     address public attacker; // Attacker address (not whitelisted)
+    address public supplyManager1; // First supply manager address
+    address public supplyManager2; // Second supply manager address
 
     // Events from RLUSDGuardian (for vm.expectEmit comparisons)
     event WhitelistAdded(address indexed account); // Emitted when a market maker is whitelisted
@@ -172,6 +44,12 @@ contract RLUSDGuardianTest is Test {
         address indexed tokenOut,
         uint256 amountOut
     ); // Emitted when a swap is executed
+    event SupplyManagerAdded(address indexed account); // Emitted when a supply manager is added
+    event SupplyManagerRemoved(address indexed account); // Emitted when a supply manager is removed
+    event ReserveFunded(address indexed from, address indexed token, uint256 amount); // Emitted when a reserve is funded
+    event ReserveWithdrawn(
+        address indexed by, address indexed token, uint256 amount, address indexed to
+    ); // Emitted when a reserve is withdrawn
 
     /// @notice Deploys the RLUSDGuardian behind a proxy and sets up initial test state.
     /// @dev This function is called before each test. It deploys tokens, mints balances, deploys the proxy, and funds the guardian.
@@ -181,6 +59,8 @@ contract RLUSDGuardianTest is Test {
         marketMaker1 = address(2); // Assign first market maker
         marketMaker2 = address(3); // Assign second market maker
         attacker = address(4); // Assign attacker address
+        supplyManager1 = address(5);
+        supplyManager2 = address(6);
 
         // Deploy test tokens (RLUSD with 18 decimals, USDC with 6 decimals)
         rlusd = new MockToken("RLUSD", "RLUSD", 18); // RLUSD token
@@ -209,6 +89,89 @@ contract RLUSDGuardianTest is Test {
         console.log("setUp(): guardian USDC balance", usdc.balanceOf(address(guardian)));
         console.log("setUp(): end");
         // No market makers are whitelisted at deployment (ensured by default state).
+    }
+
+    /// @notice Tests the supply manager role assignment and removal logic.
+    /// @dev Verifies that only the owner can add or remove supply managers, that duplicate adds revert,
+    ///      and that the correct events are emitted. Also checks that non-owners cannot assign the role.
+    function testSupplyManagerRole() public {
+        console.log("testSupplyManagerRole(): start");
+        /* non-owner cannot designate (should revert with Ownable error) */
+        vm.prank(attacker);
+        vm.expectRevert(abi.encodeWithSelector(OWNABLE_UNAUTHORIZED_ACCOUNT, attacker));
+        guardian.addSupplyManager(supplyManager1);
+        console.log("testSupplyManagerRole(): checked non-owner cannot designate");
+
+        /* owner designates supplyManager1 (should emit event and succeed) */
+        vm.prank(owner);
+        vm.expectEmit(true, true, false, true);
+        emit SupplyManagerAdded(supplyManager1);
+        guardian.addSupplyManager(supplyManager1);
+        assertTrue(guardian.isSupplyManager(supplyManager1));
+        console.log("testSupplyManagerRole(): owner designated supplyManager1");
+
+        /* duplicate add should revert with AlreadySupplyManager error */
+        vm.prank(owner);
+        vm.expectRevert(AlreadySupplyManager.selector);
+        guardian.addSupplyManager(supplyManager1);
+        console.log("testSupplyManagerRole(): duplicate add reverted as expected");
+
+        /* remove supplyManager1 (should emit event and succeed) */
+        vm.prank(owner);
+        vm.expectEmit(true, true, false, true);
+        emit SupplyManagerRemoved(supplyManager1);
+        guardian.removeSupplyManager(supplyManager1);
+        assertFalse(guardian.isSupplyManager(supplyManager1));
+        console.log("testSupplyManagerRole(): removed supplyManager1");
+        console.log("testSupplyManagerRole(): end");
+    }
+
+    /// @notice Tests the fundReserve and withdrawReserve functions for supply managers.
+    /// @dev Verifies that a supply manager can fund the reserve with RLUSD, withdraw USDC,
+    ///      and that invalid token withdrawals revert. Checks event emission and balance changes.
+    function testSupplyManagerFundWithdraw() public {
+        console.log("testSupplyManagerFundWithdraw(): start");
+        // give role to supplyManager1 (must be owner)
+        vm.prank(owner);
+        guardian.addSupplyManager(supplyManager1);
+        console.log("testSupplyManagerFundWithdraw(): supplyManager1 added");
+
+        // fund RLUSD
+        uint256 fundAmt = 1_000 * 1e18; // 1,000 RLUSD (18 decimals)
+        rlusd.mint(supplyManager1, fundAmt); // Mint RLUSD to supplyManager1
+        console.log("testSupplyManagerFundWithdraw(): minted RLUSD to supplyManager1");
+
+        vm.startPrank(supplyManager1);
+        rlusd.approve(address(guardian), fundAmt); // Approve guardian to spend RLUSD
+        vm.expectEmit(true, true, true, true);
+        emit ReserveFunded(supplyManager1, address(rlusd), fundAmt);
+        guardian.fundReserve(address(rlusd), fundAmt); // Fund the reserve
+        vm.stopPrank();
+        console.log("testSupplyManagerFundWithdraw(): supplyManager1 funded RLUSD reserve");
+
+        // Guardian's RLUSD balance should increase by fundAmt
+        assertEq(rlusd.balanceOf(address(guardian)), 51_000 * 1e18);
+
+        // withdraw USDC
+        uint256 wdAmt = 500 * 1e6; // 500 USDC (6 decimals)
+
+        vm.startPrank(supplyManager1);
+        vm.expectEmit(true, true, true, true);
+        emit ReserveWithdrawn(supplyManager1, address(usdc), wdAmt, supplyManager1);
+        guardian.withdrawReserve(address(usdc), wdAmt, supplyManager1); // Withdraw USDC to self
+        vm.stopPrank();
+        console.log("testSupplyManagerFundWithdraw(): supplyManager1 withdrew USDC reserve");
+
+        // supplyManager1 should now have wdAmt USDC, guardian's USDC should decrease
+        assertEq(usdc.balanceOf(supplyManager1), wdAmt);
+        assertEq(usdc.balanceOf(address(guardian)), 49_500 * 1e6);
+
+        // invalid token: should revert with InvalidToken error
+        vm.prank(supplyManager1);
+        vm.expectRevert(InvalidToken.selector);
+        guardian.withdrawReserve(address(0xdead), 1, supplyManager1);
+        console.log("testSupplyManagerFundWithdraw(): invalid token withdraw reverted as expected");
+        console.log("testSupplyManagerFundWithdraw(): end");
     }
 
     /// @notice Verifies that the contract owner is correctly set and tokens are initialized.

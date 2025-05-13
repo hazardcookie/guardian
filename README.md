@@ -7,9 +7,36 @@ A minimal, upgradeable treasury contract for Ripple's RLUSD and USDC stablecoins
 - **UUPS upgradeable** (proxy pattern, upgradable logic)
 - **Ownable** (Fireblocks/multisig admin)
 - **Whitelist**: Only approved market-makers can swap
+- **Supply management**: Designated supply managers can fund or withdraw RLUSD/USDC reserves
 - **SafeERC20**: Robust token transfers, reentrancy protection
 - **Decimal-aware**: Handles RLUSD (18 decimals) ↔ USDC (6 decimals) precisely
 - **Emergency rescue**: Owner can recover any ERC20 tokens sent to the contract
+
+---
+
+## Supply Management Feature
+
+The RLUSDGuardian contract supports a **supply manager** role, in addition to the owner and whitelisted market-makers. Supply managers are trusted addresses (e.g., treasury operators or bots) that can:
+
+- **Fund the contract's RLUSD or USDC reserves** (deposit tokens into the contract)
+- **Withdraw RLUSD or USDC from the contract's reserves** (to any address)
+
+This allows for flexible, secure management of the contract's liquidity without giving full admin rights.
+
+### Managing Supply Managers
+
+- Only the contract **owner** can add or remove supply managers.
+- Supply managers are tracked in a mapping and can be queried.
+
+#### Key Functions
+
+- `addSupplyManager(address account)`: Owner-only. Grants supply manager role.
+- `removeSupplyManager(address account)`: Owner-only. Revokes supply manager role.
+- `isSupplyManager(address account)`: View. Checks if an address is a supply manager.
+- `fundReserve(address token, uint256 amount)`: Supply manager or owner. Deposit RLUSD or USDC into the contract.
+- `withdrawReserve(address token, uint256 amount, address to)`: Supply manager or owner. Withdraw RLUSD or USDC to any address.
+
+See the contract and tests for full details and edge cases.
 
 ---
 
@@ -57,6 +84,7 @@ forge test
 
 All tests are in `test/RLUSDGuardian.t.sol` and cover:
 - Whitelist management
+- **Supply manager role and reserve management**
 - Swap logic (RLUSD ↔ USDC)
 - Decimal conversion correctness
 - Emergency rescue
@@ -83,8 +111,9 @@ anvil
 The RLUSDGuardian contract is a proxy-upgradeable treasury for RLUSD and USDC. Its main features:
 
 - **Whitelisting:** Only approved market-makers can swap tokens.
+- **Supply management:** Owner-designated supply managers can fund or withdraw RLUSD/USDC reserves.
 - **Swaps:** Whitelisted addresses can swap RLUSD for USDC and vice versa at a 1:1 USD value, with correct decimal handling (18 ↔ 6).
-- **Admin Controls:** Only the owner can add/remove whitelisted addresses, upgrade the contract, or rescue tokens.
+- **Admin Controls:** Only the owner can add/remove whitelisted addresses or supply managers, upgrade the contract, or rescue tokens.
 - **Security:** Uses OpenZeppelin's SafeERC20, Ownable, and ReentrancyGuard for robust, secure operations.
 - **Upgradeability:** UUPS pattern allows the contract logic to be upgraded while preserving state.
 
@@ -92,6 +121,9 @@ The RLUSDGuardian contract is a proxy-upgradeable treasury for RLUSD and USDC. I
 
 - `initialize(address rlusd, address usdc, address owner)`: Proxy initializer.
 - `addWhitelist(address)`, `removeWhitelist(address)`: Owner-only, manage market-makers.
+- `addSupplyManager(address)`, `removeSupplyManager(address)`: Owner-only, manage supply managers.
+- `isSupplyManager(address)`: View, check supply manager status.
+- `fundReserve(address, uint256)`, `withdrawReserve(address, uint256, address)`: Supply manager or owner, manage reserves.
 - `swapRLUSDForUSDC(uint256)`, `swapUSDCForRLUSD(uint256)`: Whitelisted only, atomic swaps.
 - `rescueTokens(address token, uint256 amount, address to)`: Owner-only, recover tokens.
 - `upgradeToAndCall(address newImplementation, bytes data)`: Owner-only, upgrade logic.

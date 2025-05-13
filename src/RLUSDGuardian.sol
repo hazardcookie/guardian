@@ -38,16 +38,21 @@ error NotWhitelisted();
 error NotAuthorised();
 error AmountZero();
 error AmountTooSmall();
-error NonIntegralConversion();      //  amount must be an exact multiple
+error NonIntegralConversion(); //  amount must be an exact multiple
 error InsufficientUSDC();
 error InsufficientRLUSD();
 error ZeroRecipient();
+error AlreadySupplyManager();
+error NotSupplyManager();
+error InvalidToken();
 
 /* ------------------------------------------------------------------------- */
 /*                                   Events                                  */
 /* ------------------------------------------------------------------------- */
 event WhitelistAdded(address indexed account);
+
 event WhitelistRemoved(address indexed account);
+
 event SwapExecuted(
     address indexed account,
     address indexed tokenIn,
@@ -55,17 +60,22 @@ event SwapExecuted(
     address indexed tokenOut,
     uint256 amountOut
 );
-// emitted every time rescueTokens succeeds
-event TokensRescued(               
-    address indexed token,
-    uint256 amount,
-    address indexed to
+
+event TokensRescued(address indexed token, uint256 amount, address indexed to);
+
+event SupplyManagerAdded(address indexed account);
+
+event SupplyManagerRemoved(address indexed account);
+
+event ReserveFunded(address indexed from, address indexed token, uint256 amount);
+
+event ReserveWithdrawn(
+    address indexed by, address indexed token, uint256 amount, address indexed to
 );
 
 /// @title RLUSDGuardian
-/// @notice Holds hot-wallet liquidity in RLUSD & USDC and lets *whitelisted*
-///         market-makers atomically swap between them at a 1 : 1 USD value.
-/// @dev    Designed for proxy deployment using the UUPS pattern.
+/// @notice Holds hot-wallet liquidity in RLUSD & USDC and lets *whitelisted* market-makers atomically swap between them at a 1 : 1 USD value.
+/// @dev Designed for proxy deployment using the UUPS pattern.
 contract RLUSDGuardian is
     Initializable,
     UUPSUpgradeable,
@@ -86,19 +96,24 @@ contract RLUSDGuardian is
 
     /// @dev Decimals cached for conversion math.
     uint8 private rlusdDecimals;
+    /// @dev Decimals cached for conversion math.
     uint8 private usdcDecimals;
 
     /// @dev 10**(abs(rlusdDecimals − usdcDecimals)). For RLUSD18 ↔︎ USDC6 this is 1e12.
     uint256 private conversionFactor;
 
-    /// @dev wallet ⇒ isWhitelisted
+    /// @dev Mapping of wallet address to whitelist status.
     mapping(address => bool) private _whitelist;
+
+    /// @dev Mapping of wallet address to supply manager status.
+    mapping(address => bool) private _supplyManagers;
 
     /* --------------------------------------------------------------------- */
     /*                            Initialisation                             */
     /* --------------------------------------------------------------------- */
 
-    /// @custom:oz-upgrades-unsafe-allow constructor
+    /// @notice Disables initializers for the implementation contract.
+    /// @dev OpenZeppelin UUPS pattern: disables initializers on the implementation contract.
     constructor() {
         _disableInitializers();
     }
@@ -107,11 +122,11 @@ contract RLUSDGuardian is
     /// @param rlusdAddress Address of the RLUSD ERC-20 contract.
     /// @param usdcAddress  Address of the USDC  ERC-20 contract.
     /// @param initialOwner The initial owner of the contract.
-    function initialize(
-        address rlusdAddress,
-        address usdcAddress,
-        address initialOwner
-    ) external initializer {
+    /// @dev Sets up the contract for proxy deployment. Only callable once.
+    function initialize(address rlusdAddress, address usdcAddress, address initialOwner)
+        external
+        initializer
+    {
         if (rlusdAddress == address(0) || usdcAddress == address(0)) {
             revert ZeroTokenAddress();
         }
@@ -124,38 +139,117 @@ contract RLUSDGuardian is
         __ReentrancyGuard_init();
 
         rlusdToken = IERC20(rlusdAddress);
-        usdcToken  = IERC20(usdcAddress);
+        usdcToken = IERC20(usdcAddress);
 
         rlusdDecimals = IERC20Metadata(rlusdAddress).decimals();
-        usdcDecimals  = IERC20Metadata(usdcAddress).decimals();
+        usdcDecimals = IERC20Metadata(usdcAddress).decimals();
 
         conversionFactor = rlusdDecimals >= usdcDecimals
             ? 10 ** (rlusdDecimals - usdcDecimals)
             : 10 ** (usdcDecimals - rlusdDecimals);
     }
 
-    /// @dev UUPS upgrade authorisation -- only the contract owner can upgrade.
-    function _authorizeUpgrade(address) internal override onlyOwner {}
+    /// @notice UUPS upgrade authorisation -- only the contract owner can upgrade.
+    /// @param newImplementation The address of the new implementation contract.
+    /// @dev Required by UUPSUpgradeable. Only callable by the owner.
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     /* --------------------------------------------------------------------- */
     /*                        Whitelist administration                       */
     /* --------------------------------------------------------------------- */
 
+    /// @notice Adds an account to the whitelist.
+    /// @param account The address to whitelist.
+    /// @dev Only callable by the owner. Reverts if already whitelisted or zero address.
     function addWhitelist(address account) external onlyOwner {
         if (account == address(0)) revert ZeroAddress();
-        if (_whitelist[account])    revert AlreadyWhitelisted();
+        if (_whitelist[account]) revert AlreadyWhitelisted();
         _whitelist[account] = true;
         emit WhitelistAdded(account);
     }
 
+    /// @notice Removes an account from the whitelist.
+    /// @param account The address to remove from the whitelist.
+    /// @dev Only callable by the owner. Reverts if not whitelisted.
     function removeWhitelist(address account) external onlyOwner {
         if (!_whitelist[account]) revert NotWhitelisted();
         _whitelist[account] = false;
         emit WhitelistRemoved(account);
     }
 
+    /// @notice Checks if an account is whitelisted.
+    /// @param account The address to check.
+    /// @return True if the account is whitelisted, false otherwise.
     function isWhitelisted(address account) external view returns (bool) {
         return _whitelist[account];
+    }
+
+    /* --------------------------------------------------------------------- */
+    /*                      Supply-manager administration                    */
+    /* --------------------------------------------------------------------- */
+
+    /// @notice Adds an account as a supply manager.
+    /// @param account The address to add as a supply manager.
+    /// @dev Only callable by the owner. Reverts if already a supply manager or zero address.
+    function addSupplyManager(address account) external onlyOwner {
+        if (account == address(0)) revert ZeroAddress();
+        if (_supplyManagers[account]) revert AlreadySupplyManager();
+        _supplyManagers[account] = true;
+        emit SupplyManagerAdded(account);
+    }
+
+    /// @notice Removes an account from supply managers.
+    /// @param account The address to remove as a supply manager.
+    /// @dev Only callable by the owner. Reverts if not a supply manager.
+    function removeSupplyManager(address account) external onlyOwner {
+        if (!_supplyManagers[account]) revert NotSupplyManager();
+        _supplyManagers[account] = false;
+        emit SupplyManagerRemoved(account);
+    }
+
+    /// @notice Checks if an account is a supply manager.
+    /// @param account The address to check.
+    /// @return True if the account is a supply manager, false otherwise.
+    function isSupplyManager(address account) external view returns (bool) {
+        return _supplyManagers[account];
+    }
+
+    /* --------------------------------------------------------------------- */
+    /*                      Reserve fund / withdraw logic                    */
+    /* --------------------------------------------------------------------- */
+
+    /// @notice Fund the contract's reserve with RLUSD or USDC.
+    /// @param tokenAddress The address of the token to fund (must be RLUSD or USDC).
+    /// @param amount The amount to fund.
+    /// @dev Only callable by supply managers or the owner. Reverts for invalid token or zero amount.
+    function fundReserve(address tokenAddress, uint256 amount) external nonReentrant {
+        if (!_supplyManagers[msg.sender] && msg.sender != owner()) revert NotAuthorised();
+        if (tokenAddress != address(rlusdToken) && tokenAddress != address(usdcToken)) {
+            revert InvalidToken();
+        }
+        if (amount == 0) revert AmountZero();
+
+        IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+        emit ReserveFunded(msg.sender, tokenAddress, amount);
+    }
+
+    /// @notice Withdraw tokens from the contract's reserve.
+    /// @param tokenAddress The address of the token to withdraw (must be RLUSD or USDC).
+    /// @param amount The amount to withdraw.
+    /// @param to The recipient address.
+    /// @dev Only callable by supply managers or the owner. Reverts for invalid token or zero recipient.
+    function withdrawReserve(address tokenAddress, uint256 amount, address to)
+        external
+        nonReentrant
+    {
+        if (!_supplyManagers[msg.sender] && msg.sender != owner()) revert NotAuthorised();
+        if (tokenAddress != address(rlusdToken) && tokenAddress != address(usdcToken)) {
+            revert InvalidToken();
+        }
+        if (to == address(0)) revert ZeroRecipient();
+
+        IERC20(tokenAddress).safeTransfer(to, amount);
+        emit ReserveWithdrawn(msg.sender, tokenAddress, amount, to);
     }
 
     /* --------------------------------------------------------------------- */
@@ -163,49 +257,48 @@ contract RLUSDGuardian is
     /* --------------------------------------------------------------------- */
 
     /// @notice Swap RLUSD (18 dec) for USDC (6 dec) at 1 : 1 USD value.
+    /// @param rlusdAmount The amount of RLUSD to swap (must be a multiple of conversionFactor).
+    /// @dev Only callable by whitelisted accounts. Reverts for zero amount, non-integral conversion, or insufficient liquidity.
     function swapRLUSDForUSDC(uint256 rlusdAmount) external nonReentrant {
-        if (!_whitelist[msg.sender])          revert NotAuthorised();
-        if (rlusdAmount == 0)                 revert AmountZero();
-        if (rlusdAmount % conversionFactor != 0)
-            revert NonIntegralConversion(); // prevent dust
+        if (!_whitelist[msg.sender]) revert NotAuthorised();
+        if (rlusdAmount == 0) revert AmountZero();
+        if (rlusdAmount % conversionFactor != 0) {
+            revert NonIntegralConversion();
+        } // prevent dust
 
         uint256 usdcAmount = rlusdAmount / conversionFactor;
-        if (usdcAmount == 0)                  revert AmountTooSmall();
-        if (usdcToken.balanceOf(address(this)) < usdcAmount)
+        if (usdcAmount == 0) revert AmountTooSmall();
+        if (usdcToken.balanceOf(address(this)) < usdcAmount) {
             revert InsufficientUSDC();
+        }
 
-        /* CEI pattern */
+        // CEI pattern
         rlusdToken.safeTransferFrom(msg.sender, address(this), rlusdAmount);
         usdcToken.safeTransfer(msg.sender, usdcAmount);
 
         emit SwapExecuted(
-            msg.sender,
-            address(rlusdToken),
-            rlusdAmount,
-            address(usdcToken),
-            usdcAmount
+            msg.sender, address(rlusdToken), rlusdAmount, address(usdcToken), usdcAmount
         );
     }
 
     /// @notice Swap USDC (6 dec) for RLUSD (18 dec) at 1 : 1 USD value.
+    /// @param usdcAmount The amount of USDC to swap.
+    /// @dev Only callable by whitelisted accounts. Reverts for zero amount or insufficient liquidity.
     function swapUSDCForRLUSD(uint256 usdcAmount) external nonReentrant {
-        if (!_whitelist[msg.sender])          revert NotAuthorised();
-        if (usdcAmount == 0)                  revert AmountZero();
+        if (!_whitelist[msg.sender]) revert NotAuthorised();
+        if (usdcAmount == 0) revert AmountZero();
 
         uint256 rlusdAmount = usdcAmount * conversionFactor;
-        if (rlusdAmount == 0)                 revert AmountTooSmall();
-        if (rlusdToken.balanceOf(address(this)) < rlusdAmount)
+        if (rlusdAmount == 0) revert AmountTooSmall();
+        if (rlusdToken.balanceOf(address(this)) < rlusdAmount) {
             revert InsufficientRLUSD();
+        }
 
         usdcToken.safeTransferFrom(msg.sender, address(this), usdcAmount);
         rlusdToken.safeTransfer(msg.sender, rlusdAmount);
 
         emit SwapExecuted(
-            msg.sender,
-            address(usdcToken),
-            usdcAmount,
-            address(rlusdToken),
-            rlusdAmount
+            msg.sender, address(usdcToken), usdcAmount, address(rlusdToken), rlusdAmount
         );
     }
 
@@ -214,13 +307,13 @@ contract RLUSDGuardian is
     /* --------------------------------------------------------------------- */
 
     /// @notice Owner can withdraw any ERC-20 token (including RLUSD/USDC).
-    function rescueTokens(
-        address tokenAddress,
-        uint256 amount,
-        address to
-    ) external onlyOwner {
+    /// @param tokenAddress The address of the token to rescue.
+    /// @param amount The amount to rescue.
+    /// @param to The recipient address.
+    /// @dev Only callable by the owner. Reverts for zero token address or zero recipient.
+    function rescueTokens(address tokenAddress, uint256 amount, address to) external onlyOwner {
         if (tokenAddress == address(0)) revert ZeroTokenAddress();
-        if (to == address(0))           revert ZeroRecipient();
+        if (to == address(0)) revert ZeroRecipient();
 
         IERC20(tokenAddress).safeTransfer(to, amount);
         emit TokensRescued(tokenAddress, amount, to);
@@ -229,5 +322,6 @@ contract RLUSDGuardian is
     /* --------------------------------------------------------------------- */
     /*                       Storage gap for future upgrades                 */
     /* --------------------------------------------------------------------- */
-    uint256[49] private __gap; // reduced by 1 to account for new event var (none stored)
+    /// @dev Storage gap for future upgrades. The supply-manager mapping consumes 1 slot from this gap.
+    uint256[49] private __gap; // supply-manager mapping consumes 1 slot from this gap
 }
