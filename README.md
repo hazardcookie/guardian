@@ -124,8 +124,6 @@ RLUSD_TOKEN=0x...
 USDC_TOKEN=0x...
 ```
 
-> Tip  Copy the file as `.env.example` (with dummy values) so that other contributors know which variables are required.
-
 ### 8. Deploy to Sepolia
 
 The repository contains a Forge script that deploys an upgradeable `RLUSDGuardian` proxy and automatically verifies the implementation on Etherscan.
