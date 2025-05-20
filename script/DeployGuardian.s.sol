@@ -7,16 +7,16 @@ import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract DeployGuardian is Script {
     function run() external {
-        uint256 deployerKey  = vm.envUint("DEPLOYER_KEY");
-        address coldOwner    = vm.envAddress("COLD_OWNER");
-        address rlusd        = vm.envAddress("RLUSD_TOKEN");
-        address usdc         = vm.envAddress("USDC_TOKEN");
+        uint256 deployerKey = vm.envUint("DEPLOYER_KEY");
+        address coldOwner = vm.envAddress("COLD_OWNER");
+        address rlusd = vm.envAddress("RLUSD_TOKEN");
+        address usdc = vm.envAddress("USDC_TOKEN");
 
         vm.startBroadcast(deployerKey);
 
         // Implementation + proxy
-        RLUSDGuardian impl  = new RLUSDGuardian();
-        ERC1967Proxy proxy  = new ERC1967Proxy(address(impl), "");
+        RLUSDGuardian impl = new RLUSDGuardian();
+        ERC1967Proxy proxy = new ERC1967Proxy(address(impl), "");
 
         // Initialise: guardian owner becomes the cold wallet
         RLUSDGuardian(address(proxy)).initialize(rlusd, usdc, coldOwner);
