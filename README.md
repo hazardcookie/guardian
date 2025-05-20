@@ -96,13 +96,7 @@ All tests are in `test/RLUSDGuardian.t.sol` and cover:
 forge fmt
 ```
 
-### 6. Local Node (optional, for scripting)
-
-```sh
-anvil
-```
-
-### 7. Configure Environment Variables (.env)
+### 6. Configure Environment Variables (.env)
 
 Create a `.env` file in the project root and fill in the following keys (do **not** commit this file!):
 
@@ -124,7 +118,7 @@ RLUSD_TOKEN=0x...
 USDC_TOKEN=0x...
 ```
 
-### 8. Deploy to Sepolia
+### 7. Deploy to Sepolia
 
 The repository contains a Forge script that deploys an upgradeable `RLUSDGuardian` proxy and automatically verifies the implementation on Etherscan.
 
