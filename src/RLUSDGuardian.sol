@@ -103,10 +103,10 @@ contract RLUSDGuardian is
     uint256 private conversionFactor;
 
     /// @dev Mapping of wallet address to whitelist status.
-    mapping(address => bool) private _whitelist;
+    mapping(address account => bool isWhitelisted) private _whitelist;
 
     /// @dev Mapping of wallet address to supply manager status.
-    mapping(address => bool) private _supplyManagers;
+    mapping(address account => bool isSupplyManager) private _supplyManagers;
 
     /* --------------------------------------------------------------------- */
     /*                               Modifiers                               */

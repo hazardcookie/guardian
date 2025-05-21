@@ -11,8 +11,8 @@ contract NoReturnToken {
     string public name; // Token name
     string public symbol; // Token symbol
     uint8 public decimals; // Number of decimals
-    mapping(address => uint256) public balanceOf; // Mapping of address to balance
-    mapping(address => mapping(address => uint256)) public allowance; // Allowance mapping
+    mapping(address account => uint256 balance) public balanceOf; // Mapping of address to balance
+    mapping(address owner => mapping(address spender => uint256 amount)) public allowance; // Allowance mapping
 
     event Transfer(address indexed from, address indexed to, uint256 value); // Standard ERC20 event
     event Approval(address indexed owner, address indexed spender, uint256 value); // Standard ERC20 event
