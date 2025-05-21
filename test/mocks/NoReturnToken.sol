@@ -5,6 +5,9 @@ pragma solidity ^0.8.22;
 /// @notice ERC20 mock that does not return a boolean on transfer/transferFrom (like USDT).
 /// @dev Used to test handling of non-standard ERC20s that do not return a value on transfer/transferFrom.
 contract NoReturnToken {
+    error InsufficientBalance();
+    error InsufficientAllowance();
+
     string public name; // Token name
     string public symbol; // Token symbol
     uint8 public decimals; // Number of decimals
@@ -28,7 +31,7 @@ contract NoReturnToken {
     /// @param to The recipient address.
     /// @param value The amount to transfer.
     function transfer(address to, uint256 value) public {
-        require(balanceOf[msg.sender] >= value, "NoReturnToken: insufficient balance");
+        if (balanceOf[msg.sender] < value) revert InsufficientBalance();
         balanceOf[msg.sender] -= value;
         balanceOf[to] += value;
         emit Transfer(msg.sender, to, value);
@@ -40,8 +43,8 @@ contract NoReturnToken {
     /// @param to The recipient address.
     /// @param value The amount to transfer.
     function transferFrom(address from, address to, uint256 value) public {
-        require(balanceOf[from] >= value, "NoReturnToken: insufficient balance");
-        require(allowance[from][msg.sender] >= value, "NoReturnToken: insufficient allowance");
+        if (balanceOf[from] < value) revert InsufficientBalance();
+        if (allowance[from][msg.sender] < value) revert InsufficientAllowance();
         balanceOf[from] -= value;
         balanceOf[to] += value;
         emit Transfer(from, to, value);
