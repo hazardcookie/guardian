@@ -15,7 +15,8 @@ pragma solidity 0.8.22;
  |  • SafeERC20 transfers, ReentrancyGuard, strict CEI pattern.              |
  |  • Decimal-aware conversion (RLUSD 18 dec ↔︎ USDC 6 dec).                  |
  |                                                                           |
- |  Authors: @hazardcookie                                                   |
+ |  Author: @hazardcookie (hazardcookie.eth)                                 |
+ |  Security-contact bugs@ripple.com                                         |
 \*───────────────────────────────────────────────────────────────────────────*/
 
 import "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
