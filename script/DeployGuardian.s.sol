@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
+/// @custom:security-contact bugs@ripple.com
 pragma solidity 0.8.22;
 
 import "forge-std/Script.sol";
