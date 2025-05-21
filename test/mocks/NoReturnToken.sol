@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.22;
+pragma solidity 0.8.22;
 
 /// @title NoReturnToken
 /// @notice ERC20 mock that does not return a boolean on transfer/transferFrom (like USDT).

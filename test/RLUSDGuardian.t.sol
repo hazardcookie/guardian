@@ -1,4 +1,4 @@
-pragma solidity ^0.8.22;
+pragma solidity 0.8.22;
 
 import "forge-std/Test.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
