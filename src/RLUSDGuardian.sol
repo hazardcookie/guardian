@@ -47,6 +47,7 @@ error ZeroRecipient();
 error AlreadySupplyManager();
 error NotSupplyManager();
 error InvalidToken();
+error InvalidDecimals();
 
 /* ------------------------------------------------------------------------- */
 /*                                   Events                                  */
@@ -155,9 +156,12 @@ contract RLUSDGuardian is
         rlusdDecimals = IERC20Metadata(rlusdAddress).decimals();
         usdcDecimals = IERC20Metadata(usdcAddress).decimals();
 
-        conversionFactor = rlusdDecimals >= usdcDecimals
-            ? 10 ** (rlusdDecimals - usdcDecimals)
-            : 10 ** (usdcDecimals - rlusdDecimals);
+        // Ensure RLUSD has more decimals than USDC to prevent value distortion in swaps
+        if (rlusdDecimals <= usdcDecimals) revert InvalidDecimals();
+
+        // With the above check, rlusdDecimals is always greater than usdcDecimals,
+        // so conversionFactor will always be 10 ** (rlusdDecimals - usdcDecimals)
+        conversionFactor = 10 ** (rlusdDecimals - usdcDecimals);
     }
 
     /// @notice UUPS upgrade authorisation -- only the contract owner can upgrade.

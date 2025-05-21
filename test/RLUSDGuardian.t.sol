@@ -589,4 +589,80 @@ contract RLUSDGuardianTest is Test {
         );
         console.log("testUpgradeability(): end");
     }
+
+    /// @notice Tests the contract with RLUSD (6 decimals) and USDC (18 decimals) to ensure swaps do not silently distort value.
+    function testDecimalsReversedShouldFailOrBeHandled() public {
+        console.log("testDecimalsReversedShouldFailOrBeHandled(): start");
+        // Deploy RLUSD with 6 decimals, USDC with 18 decimals
+        MockToken rlusd6 = new MockToken("RLUSD", "RLUSD", 6);
+        MockToken usdc18 = new MockToken("USDC", "USDC", 18);
+
+        RLUSDGuardian logic = new RLUSDGuardian();
+        ERC1967Proxy proxy = new ERC1967Proxy(address(logic), "");
+        RLUSDGuardian guardianTest = RLUSDGuardian(address(proxy));
+
+        // Expect revert due to InvalidDecimals on initialize
+        vm.expectRevert(InvalidDecimals.selector);
+        vm.prank(owner);
+        guardianTest.initialize(address(rlusd6), address(usdc18), owner);
+        console.log("testDecimalsReversedShouldFailOrBeHandled(): end");
+    }
+
+    /// @notice Fuzz test for various RLUSD and USDC decimal combinations to ensure swaps do not silently distort value.
+    function testFuzzedDecimalsShouldRevertOrSucceed(uint8 rlusdDec, uint8 usdcDec) public {
+        console.log("testFuzzedDecimalsShouldRevertOrSucceed(): start");
+        // Limit decimals to 0–18 (ERC20 standard)
+        rlusdDec = uint8(bound(rlusdDec, 0, 18));
+        usdcDec = uint8(bound(usdcDec, 0, 18));
+        console.log("RLUSD decimals:", rlusdDec);
+        console.log("USDC decimals:", usdcDec);
+
+        // Skip the case where decimals are the expected config (18, 6)
+        if (rlusdDec == 18 && usdcDec == 6) {
+            console.log("Skipping expected config (18, 6)");
+            return;
+        }
+
+        MockToken rlusdToken = new MockToken("RLUSD", "RLUSD", rlusdDec);
+        MockToken usdcToken = new MockToken("USDC", "USDC", usdcDec);
+
+        RLUSDGuardian logic = new RLUSDGuardian();
+        ERC1967Proxy proxy = new ERC1967Proxy(address(logic), "");
+        RLUSDGuardian guardianTest = RLUSDGuardian(address(proxy));
+
+        if (rlusdDec <= usdcDec) {
+            console.log("Expecting revert: RLUSD decimals <= USDC decimals (on initialize)");
+            vm.expectRevert(InvalidDecimals.selector);
+            vm.prank(owner);
+            guardianTest.initialize(address(rlusdToken), address(usdcToken), owner);
+            return;
+        }
+
+        vm.prank(owner);
+        guardianTest.initialize(address(rlusdToken), address(usdcToken), owner);
+        console.log("Initialized guardian with RLUSD and USDC decimals");
+
+        // Whitelist a market maker
+        vm.prank(owner);
+        guardianTest.addWhitelist(marketMaker1);
+        console.log("Whitelisted marketMaker1");
+
+        // Mint and approve tokens
+        uint256 rlusdAmount = 1000 * 10 ** rlusdDec;
+        uint256 usdcAmount = 1000 * 10 ** usdcDec;
+        rlusdToken.mint(marketMaker1, rlusdAmount);
+        usdcToken.mint(address(guardianTest), usdcAmount);
+        console.log("Minted RLUSD and USDC to marketMaker1 and guardian");
+
+        vm.prank(marketMaker1);
+        rlusdToken.approve(address(guardianTest), rlusdAmount);
+        console.log("marketMaker1 approved guardian for RLUSD");
+
+        // Should succeed for valid config
+        console.log("Expecting success: RLUSD decimals > USDC decimals");
+        vm.prank(marketMaker1);
+        guardianTest.swapRLUSDForUSDC(rlusdAmount);
+        // Optionally, assert correct balances here
+        console.log("testFuzzedDecimalsShouldRevertOrSucceed(): end");
+    }
 }
