@@ -344,6 +344,6 @@ contract RLUSDGuardian is
     /* --------------------------------------------------------------------- */
     /*                       Storage gap for future upgrades                 */
     /* --------------------------------------------------------------------- */
-    /// @dev Storage gap for future upgrades. The supply-manager mapping consumes 1 slot from this gap.
-    uint256[49] private __gap; // supply-manager mapping consumes 1 slot from this gap
+    /// @dev Storage gap for future upgrades.
+    uint256[50] private __gap;
 }
