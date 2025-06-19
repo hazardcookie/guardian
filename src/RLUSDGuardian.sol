@@ -284,23 +284,24 @@ contract RLUSDGuardian is
     function swapRLUSDForUSDC(uint256 rlusdAmount) external nonReentrant {
         if (!_whitelist[msg.sender]) revert NotAuthorised();
         if (rlusdAmount == 0) revert AmountZero();
-        if (rlusdAmount % conversionFactor != 0) {
-            revert NonIntegralConversion();
-        } // prevent dust
 
-        uint256 usdcAmount = rlusdAmount / conversionFactor;
+        // Cache variables for gas efficiency
+        uint256 _factor = conversionFactor;
+        IERC20 _usdc = usdcToken;
+        IERC20 _rlusd = rlusdToken;
+
+        // Prevent dust
+        if (rlusdAmount % _factor != 0) revert NonIntegralConversion();
+
+        uint256 usdcAmount = rlusdAmount / _factor;
         if (usdcAmount == 0) revert AmountTooSmall();
-        if (usdcToken.balanceOf(address(this)) < usdcAmount) {
-            revert InsufficientUSDC();
-        }
+        if (_usdc.balanceOf(address(this)) < usdcAmount) revert InsufficientUSDC();
 
         // CEI pattern
-        rlusdToken.safeTransferFrom(msg.sender, address(this), rlusdAmount);
-        usdcToken.safeTransfer(msg.sender, usdcAmount);
+        _rlusd.safeTransferFrom(msg.sender, address(this), rlusdAmount);
+        _usdc.safeTransfer(msg.sender, usdcAmount);
 
-        emit SwapExecuted(
-            msg.sender, address(rlusdToken), rlusdAmount, address(usdcToken), usdcAmount
-        );
+        emit SwapExecuted(msg.sender, address(_rlusd), rlusdAmount, address(_usdc), usdcAmount);
     }
 
     /// @notice Swap USDC (6 dec) for RLUSD (18 dec) at 1 : 1 USD value.
@@ -310,18 +311,19 @@ contract RLUSDGuardian is
         if (!_whitelist[msg.sender]) revert NotAuthorised();
         if (usdcAmount == 0) revert AmountZero();
 
-        uint256 rlusdAmount = usdcAmount * conversionFactor;
+        // Cache variables for gas efficiency
+        uint256 _factor = conversionFactor;
+        IERC20 _usdc = usdcToken;
+        IERC20 _rlusd = rlusdToken;
+
+        uint256 rlusdAmount = usdcAmount * _factor;
         if (rlusdAmount == 0) revert AmountTooSmall();
-        if (rlusdToken.balanceOf(address(this)) < rlusdAmount) {
-            revert InsufficientRLUSD();
-        }
+        if (_rlusd.balanceOf(address(this)) < rlusdAmount) revert InsufficientRLUSD();
 
-        usdcToken.safeTransferFrom(msg.sender, address(this), usdcAmount);
-        rlusdToken.safeTransfer(msg.sender, rlusdAmount);
+        _usdc.safeTransferFrom(msg.sender, address(this), usdcAmount);
+        _rlusd.safeTransfer(msg.sender, rlusdAmount);
 
-        emit SwapExecuted(
-            msg.sender, address(usdcToken), usdcAmount, address(rlusdToken), rlusdAmount
-        );
+        emit SwapExecuted(msg.sender, address(_usdc), usdcAmount, address(_rlusd), rlusdAmount);
     }
 
     /* --------------------------------------------------------------------- */
