@@ -156,8 +156,8 @@ contract RLUSDGuardian is
         rlusdDecimals = IERC20Metadata(rlusdAddress).decimals();
         usdcDecimals = IERC20Metadata(usdcAddress).decimals();
 
-        // Ensure RLUSD has more decimals than USDC to prevent value distortion in swaps
-        if (rlusdDecimals <= usdcDecimals) revert InvalidDecimals();
+        // Ensure RLUSD has at least as many decimals as USDC
+        if (rlusdDecimals < usdcDecimals) revert InvalidDecimals();
 
         // With the above check, rlusdDecimals is always greater than usdcDecimals,
         // so conversionFactor will always be 10 ** (rlusdDecimals - usdcDecimals)
