@@ -97,11 +97,7 @@ contract RLUSDGuardian is
     /// @notice USDC ERC-20 token contract (6 decimals).
     IERC20 public usdcToken;
 
-    /// @dev Decimals cached for conversion math.
-    uint8 private rlusdDecimals;
-    uint8 private usdcDecimals;
-
-    /// @dev 10**(abs(rlusdDecimals − usdcDecimals)). For RLUSD18 ↔︎ USDC6 this is 1e12.
+    /// @dev conversionFactor = 10 ** (rlusdDec - usdcDec); for RLUSD18 ↔︎ USDC6 this is 1e12.
     uint256 private conversionFactor;
 
     /// @dev Mapping of wallet address to whitelist status.
@@ -153,15 +149,14 @@ contract RLUSDGuardian is
         rlusdToken = IERC20(rlusdAddress);
         usdcToken = IERC20(usdcAddress);
 
-        rlusdDecimals = IERC20Metadata(rlusdAddress).decimals();
-        usdcDecimals = IERC20Metadata(usdcAddress).decimals();
+        uint8 rlusdDec = IERC20Metadata(rlusdAddress).decimals();
+        uint8 usdcDec = IERC20Metadata(usdcAddress).decimals();
 
-        // Ensure RLUSD has more decimals than USDC to prevent value distortion in swaps
-        if (rlusdDecimals <= usdcDecimals) revert InvalidDecimals();
+        // Ensure RLUSD has at least as many decimals as USDC to prevent value distortion in swaps
+        if (rlusdDec <= usdcDec) revert InvalidDecimals();
 
-        // With the above check, rlusdDecimals is always greater than usdcDecimals,
-        // so conversionFactor will always be 10 ** (rlusdDecimals - usdcDecimals)
-        conversionFactor = 10 ** (rlusdDecimals - usdcDecimals);
+        // conversionFactor = 10 ** (rlusdDec - usdcDec)
+        conversionFactor = 10 ** (rlusdDec - usdcDec);
     }
 
     /// @notice UUPS upgrade authorisation -- only the contract owner can upgrade.
