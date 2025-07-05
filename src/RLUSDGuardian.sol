@@ -87,6 +87,7 @@ event ReserveWithdrawn(
 
 /// @title RLUSDGuardian
 /// @notice Holds hot-wallet liquidity in RLUSD & USDC and lets *whitelisted* market-makers atomically swap between them at a 1 : 1 USD value.
+/// @custom:security-contact bugs@ripple.com
 /// @dev Designed for proxy deployment using the UUPS pattern.
 contract RLUSDGuardian is
     Initializable,
