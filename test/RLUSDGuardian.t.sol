@@ -630,7 +630,7 @@ contract RLUSDGuardianTest is Test {
         ERC1967Proxy proxy = new ERC1967Proxy(address(logic), "");
         RLUSDGuardian guardianTest = RLUSDGuardian(address(proxy));
 
-        if (rlusdDec <= usdcDec) {
+        if (rlusdDec < usdcDec) {
             console.log("Expecting revert: RLUSD decimals <= USDC decimals (on initialize)");
             vm.expectRevert(InvalidDecimals.selector);
             vm.prank(owner);
