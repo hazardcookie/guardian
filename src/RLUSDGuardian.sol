@@ -52,10 +52,13 @@ error InvalidDecimals();
 /* ------------------------------------------------------------------------- */
 /*                                   Events                                  */
 /* ------------------------------------------------------------------------- */
+/// @notice Emitted when an account is added to the whitelist.
 event WhitelistAdded(address indexed account);
 
+/// @notice Emitted when an account is removed from the whitelist.
 event WhitelistRemoved(address indexed account);
 
+/// @notice Emitted when a swap between RLUSD and USDC is executed.
 event SwapExecuted(
     address indexed account,
     address indexed tokenIn,
@@ -64,14 +67,19 @@ event SwapExecuted(
     uint256 amountOut
 );
 
+/// @notice Emitted when tokens are rescued by the owner.
 event TokensRescued(address indexed token, uint256 amount, address indexed to);
 
+/// @notice Emitted when an account is added as a supply manager.
 event SupplyManagerAdded(address indexed account);
 
+/// @notice Emitted when an account is removed as a supply manager.
 event SupplyManagerRemoved(address indexed account);
 
+/// @notice Emitted when the reserve is funded with RLUSD or USDC.
 event ReserveFunded(address indexed from, address indexed token, uint256 amount);
 
+/// @notice Emitted when tokens are withdrawn from the reserve.
 event ReserveWithdrawn(
     address indexed by, address indexed token, uint256 amount, address indexed to
 );
@@ -97,11 +105,7 @@ contract RLUSDGuardian is
     /// @notice USDC ERC-20 token contract (6 decimals).
     IERC20 public usdcToken;
 
-    /// @dev Decimals cached for conversion math.
-    uint8 private rlusdDecimals;
-    uint8 private usdcDecimals;
-
-    /// @dev 10**(abs(rlusdDecimals − usdcDecimals)). For RLUSD18 ↔︎ USDC6 this is 1e12.
+    /// @dev conversionFactor = 10 ** (rlusdDec - usdcDec); for RLUSD18 ↔︎ USDC6 this is 1e12.
     uint256 private conversionFactor;
 
     /// @dev Mapping of wallet address to whitelist status.
@@ -153,15 +157,14 @@ contract RLUSDGuardian is
         rlusdToken = IERC20(rlusdAddress);
         usdcToken = IERC20(usdcAddress);
 
-        rlusdDecimals = IERC20Metadata(rlusdAddress).decimals();
-        usdcDecimals = IERC20Metadata(usdcAddress).decimals();
+        uint8 rlusdDec = IERC20Metadata(rlusdAddress).decimals();
+        uint8 usdcDec = IERC20Metadata(usdcAddress).decimals();
 
         // Ensure RLUSD has at least as many decimals as USDC
         if (rlusdDecimals < usdcDecimals) revert InvalidDecimals();
 
-        // With the above check, rlusdDecimals is always greater than usdcDecimals,
-        // so conversionFactor will always be 10 ** (rlusdDecimals - usdcDecimals)
-        conversionFactor = 10 ** (rlusdDecimals - usdcDecimals);
+        // conversionFactor = 10 ** (rlusdDec - usdcDec)
+        conversionFactor = 10 ** (rlusdDec - usdcDec);
     }
 
     /// @notice UUPS upgrade authorisation -- only the contract owner can upgrade.
