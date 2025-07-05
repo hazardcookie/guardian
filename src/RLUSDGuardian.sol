@@ -163,7 +163,7 @@ contract RLUSDGuardian is
         uint8 usdcDec = IERC20Metadata(usdcAddress).decimals();
 
         // Ensure RLUSD has at least as many decimals as USDC
-        if (rlusdDecimals < usdcDecimals) revert InvalidDecimals();
+        if (rlusdDec < usdcDec) revert InvalidDecimals();
 
         // conversionFactor = 10 ** (rlusdDec - usdcDec)
         conversionFactor = 10 ** (rlusdDec - usdcDec);
